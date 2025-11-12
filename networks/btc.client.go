@@ -21,7 +21,7 @@ func NewBTCTxnMakerClient(ankrApiKey string, isTestnet bool) (*BTCTxnMakerClient
 	}, nil
 }
 
-func (b *BTCTxnMakerClient) MakeNativeTxn(ctx context.Context, opts NativeTxnOpts) (string, error) {
+func (b *BTCTxnMakerClient) TransferNative(ctx context.Context, opts NativeTxnOpts) (string, error) {
 
 	formattedAmount, err := utils.AmountToChainUnit(strconv.FormatFloat(opts.Value, 'f', -1, 64), "8")
 	if err != nil {

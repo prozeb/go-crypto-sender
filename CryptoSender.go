@@ -42,13 +42,13 @@ func NewTxnMakerClient(rpcs map[types.Network]string) (*TxnMakerClient, error) {
 	return t, nil
 }
 
-func (t *TxnMakerClient) MakeNativeTxn(ctx context.Context, opts networks.NativeTxnOpts) (string, error) {
+func (t *TxnMakerClient) TransferNative(ctx context.Context, opts networks.NativeTxnOpts) (string, error) {
 	client, ok := t.NetworkClient[opts.Network]
 	if !ok {
 		fmt.Printf("network %s not supported", opts.Network)
 		return "", liberrors.ErrUnsupported
 	}
-	return client.MakeNativeTxn(ctx, opts)
+	return client.TransferNative(ctx, opts)
 }
 
 func (t *TxnMakerClient) TransferToken(ctx context.Context, opts networks.TransferTokenOpts) (string, error) {

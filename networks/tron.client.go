@@ -165,8 +165,8 @@ func NewTronTxnMakerClient(rpc string) (*TronTxnMakerClient, error) {
 
 // --------------------------- Public: Native TRX ---------------------------
 
-// MakeNativeTxn creates, signs, and broadcasts a native TRX transfer.
-func (c *TronTxnMakerClient) MakeNativeTxn(ctx context.Context, opts NativeTxnOpts) (string, error) {
+// TransferNative creates, signs, and broadcasts a native TRX transfer.
+func (c *TronTxnMakerClient) TransferNative(ctx context.Context, opts NativeTxnOpts) (string, error) {
 
 	sender, err := tronWallet.FromPrivateKeyHex(opts.PrivateKey)
 	if err != nil {

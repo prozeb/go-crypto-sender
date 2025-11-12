@@ -27,7 +27,8 @@ const ERC20ABI = `
 	{"constant":true,"inputs":[{"name":"owner","type":"address"}],"name":"balanceOf","outputs":[{"name":"","type":"uint256"}],"type":"function"},
 	{"constant":true,"inputs":[{"name":"owner","type":"address"},{"name":"spender","type":"address"}],"name":"allowance","outputs":[{"name":"","type":"uint256"}],"type":"function"},
 	{"constant":false,"inputs":[{"name":"spender","type":"address"},{"name":"value","type":"uint256"}],"name":"approve","outputs":[{"name":"","type":"bool"}],"type":"function"},
-	{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"type":"function"}
+	{"constant":false,"inputs":[{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transfer","outputs":[{"name":"","type":"bool"}],"type":"function"},
+	{"constant":false,"inputs":[{"name":"from","type":"address"},{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"","type":"bool"}],"type":"function"}
 ]
 `
 
@@ -48,7 +49,7 @@ func NewEVMTxnMakerClient(rpc string) (*EVMTxnMakerClient, error) {
 	return client, nil
 }
 
-func (c *EVMTxnMakerClient) MakeNativeTxn(ctx context.Context, opts NativeTxnOpts) (string, error) {
+func (c *EVMTxnMakerClient) TransferNative(ctx context.Context, opts NativeTxnOpts) (string, error) {
 	client, err := c.getClient()
 	if err != nil {
 		return "", err
@@ -59,6 +60,7 @@ func (c *EVMTxnMakerClient) MakeNativeTxn(ctx context.Context, opts NativeTxnOpt
 		return "", err
 	}
 
+	fmt.Println("sasasas", wallet.Balance)
 	to := common.HexToAddress(opts.To)
 
 	// ---------------- DYNAMIC GAS ESTIMATION ----------------
@@ -215,6 +217,7 @@ func (c *EVMTxnMakerClient) ApproveToken(ctx context.Context, opts ApproveTokenO
 		if err != nil {
 			return "", fmt.Errorf("failed to convert amount to wei: %w", err)
 		}
+
 		amount = formattedAmount
 	}
 
@@ -277,10 +280,11 @@ func (c *EVMTxnMakerClient) TransferFrom(ctx context.Context, opts TransferFromO
 		ContractAddress: opts.ContractAddress,
 		FunctionName:    "allowance",
 		Network:         opts.Network,
-	}, wallet.Address, opts.FromAddress)
+	}, opts.FromAddress, wallet.Address)
 	if err != nil {
 		return "", err
 	}
+
 	allowance := new(big.Int)
 	allowance.SetString(allowanceStr, 10)
 
@@ -313,7 +317,11 @@ func (c *EVMTxnMakerClient) TransferFrom(ctx context.Context, opts TransferFromO
 			return "", fmt.Errorf("amount is empty")
 		}
 
-		transferAmount.SetString(opts.Amount, 10)
+		amount, err := utils.AmountToChainUnit(opts.Amount, strconv.Itoa(opts.Decimals))
+		if err != nil {
+			return "", err
+		}
+		transferAmount.Set(amount)
 	}
 
 	if allowance.Cmp(transferAmount) < 0 {

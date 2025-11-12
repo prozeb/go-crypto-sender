@@ -52,7 +52,7 @@ type CallTokenFunctionOpts struct {
 }
 
 type AbstractClient interface {
-	MakeNativeTxn(ctx context.Context, opts NativeTxnOpts) (string, error)
+	TransferNative(ctx context.Context, opts NativeTxnOpts) (string, error)
 	TransferToken(ctx context.Context, opts TransferTokenOpts) (string, error)
 	ApproveToken(ctx context.Context, opts ApproveTokenOpts) (string, error)
 	TransferFrom(ctx context.Context, opts TransferFromOpts) (string, error)
