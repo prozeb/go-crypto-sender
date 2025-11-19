@@ -4,22 +4,22 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/prozeb/go-crypto-sender)](https://goreportcard.com/report/github.com/prozeb/go-crypto-sender)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Go Crypto Sender is a versatile Go library that simplifies cryptocurrency transactions across multiple blockchain networks. It provides a unified interface for sending native tokens, transferring tokens, and interacting with smart contracts on various blockchains.
+Go Crypto Sender is a powerful Go library that provides a unified interface for creating, signing, and broadcasting transactions across multiple blockchain networks.
 
 ## Features
 
-- **Multi-Network Support**: Works with multiple blockchain networks including:
-  - EVM-compatible chains (Ethereum, Polygon, BSC, etc.)
+- **Multi-Network Support**:
+  - EVM-compatible chains (Ethereum, Polygon, BSC)
   - TRON (Mainnet & Shasta testnet)
   - Bitcoin (Mainnet & Testnet)
-- **Transaction Types**:
+
+- **Core Functionality**:
   - Native token transfers
   - ERC-20/TRC-20 token transfers
   - Token approvals
   - Transfer from (for pre-approved tokens)
-  - Custom smart contract function calls
-- **Simple API**: Clean and intuitive interface for all operations
-- **Thread-Safe**: Designed for concurrent use
+  - Custom smart contract interactions
+  - Balance queries
 
 ## Installation
 
@@ -37,6 +37,7 @@ import (
     "fmt"
     "github.com/prozeb/go-crypto-sender"
     "github.com/prozeb/go-crypto-sender/types"
+    "github.com/prozeb/go-crypto-sender/networks"
 )
 
 func main() {
@@ -44,7 +45,6 @@ func main() {
     rpcs := map[types.Network]string{
         types.ETHEREUM: "https://mainnet.infura.io/v3/YOUR-API-KEY",
         types.TRON:     "https://api.trongrid.io",
-        types.BTC:      "https://btc-node.example.com",
     }
 
     client, err := gocryptosender.NewTxnMakerClient(rpcs)
@@ -54,8 +54,8 @@ func main() {
 
     ctx := context.Background()
 
-    // Example: Send native token
-    txHash, err := client.MakeNativeTxn(ctx, networks.NativeTxnOpts{
+    // Example: Transfer native tokens
+    result, err := client.BuildTransferNativeTxn(ctx, networks.NativeTxnOpts{
         Network:   types.ETHEREUM,
         From:      "0x...",
         To:        "0x...",
@@ -67,60 +67,63 @@ func main() {
     if err != nil {
         panic(err)
     }
+
+    // Broadcast the transaction
+    txHash, err := client.BroadcastTxn(ctx, result)
+    if err != nil {
+        panic(err)
+    }
     fmt.Printf("Transaction sent: %s\n", txHash)
 }
 ```
 
-## Supported Networks
-
-The library supports the following networks (defined in `types.Network`):
-
-- `ETHEREUM`
-- `POLYGON`
-- `BSC`
-- `TRON`
-- `SHASTA` (TRON testnet)
-- `BTC`
-- `BTC_TESTNET`
-
 ## API Reference
 
 ### Initialize Client
-
 ```go
 func NewTxnMakerClient(rpcs map[types.Network]string) (*TxnMakerClient, error)
 ```
 
 ### Available Methods
 
-1. **Native Token Transfer**
+1. **Build and Sign Native Token Transfer**
    ```go
-   MakeNativeTxn(ctx context.Context, opts networks.NativeTxnOpts) (string, error)
+   BuildTransferNativeTxn(ctx context.Context, opts networks.NativeTxnOpts) (*networks.TxnBuildResult, error)
    ```
 
-2. **Token Transfer**
+2. **Build and Sign Token Transfer**
    ```go
-   TransferToken(ctx context.Context, opts networks.TransferTokenOpts) (string, error)
+   BuildTransferTokenTxn(ctx context.Context, opts networks.TransferTokenOpts) (*networks.TxnBuildResult, error)
    ```
 
-3. **Token Approval**
+3. **Get Native Balance**
    ```go
-   ApproveToken(ctx context.Context, opts networks.ApproveTokenOpts) (string, error)
+   GetNativeBalance(ctx context.Context, opts networks.NativeBalanceOpts) (*big.Int, error)
    ```
 
-4. **Transfer From**
+4. **Build Token Approval**
    ```go
-   TransferFrom(ctx context.Context, opts networks.TransferFromOpts) (string, error)
+   BuildApproveTokenTxn(ctx context.Context, opts networks.ApproveTokenOpts) (*networks.TxnBuildResult, error)
    ```
 
-5. **Call Token Function**
+5. **Broadcast Transaction**
+   ```go
+   BroadcastTxn(ctx context.Context, txn *networks.TxnBuildResult) (string, error)
+   ```
+
+6. **Build Transfer From**
+   ```go
+   BuildTransferFromTxn(ctx context.Context, opts networks.TransferFromOpts) (*networks.TxnBuildResult, error)
+   ```
+
+7. **Call Token Function**
    ```go
    CallTokenFunction(ctx context.Context, opts networks.CallTokenFunctionOpts, args ...interface{}) (string, error)
    ```
 
 ## Error Handling
 
-The library defines custom error types in the `liberrors` package. Always check and handle errors returned by the library functions.
+The library uses standard Go error handling. All methods return an error that should be checked.
 
 ## Contributing
 
@@ -128,17 +131,11 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT
 
 ## Disclaimer
 
-This software is provided "as is" and any expressed or implied warranties, including, but not limited to, the implied warranties of merchantability and fitness for a particular purpose are disclaimed. In no event shall the authors or copyright holders be liable for any direct, indirect, incidental, special, exemplary, or consequential damages.
-```
-
-### Step 3: After adding the README, commit and push your changes
-
-```bash
-git add readme.md
+This software is provided "as is" without any warranties. Use at your own risk.
 git commit -m "Add comprehensive README.md"
 git push origin main
 ```
@@ -156,4 +153,3 @@ The README includes:
 - License information
 - Standard disclaimer
 
-Would you like me to help you with anything else?
