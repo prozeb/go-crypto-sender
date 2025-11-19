@@ -15,7 +15,7 @@ import (
 
 func FetchFromAnkr(address string, net netchain.Net, ankrApiKey string) (Address, error) {
 
-	balance, err := getBalance(address, net, ankrApiKey)
+	balance, err := GetBalance(address, net, ankrApiKey)
 	if err != nil {
 		return Address{}, err
 	}
@@ -92,7 +92,7 @@ func getUTXOs(address string, net netchain.Net, ankrApiKey string) ([]UTXO, erro
 	return utxos, nil
 }
 
-func getBalance(address string, net netchain.Net, ankrApiKey string) (int64, error) {
+func GetBalance(address string, net netchain.Net, ankrApiKey string) (int64, error) {
 
 	url := fmt.Sprintf("https://rpc.ankr.com/premium-http/%s/%s/api/v2/address/%s?details=basic", getAnkrNetworkKey(net), ankrApiKey, address)
 	resp, err := http.Get(url)

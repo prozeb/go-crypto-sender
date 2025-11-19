@@ -2,6 +2,7 @@ package networks
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/prozeb/go-crypto-sender/types"
 )
@@ -45,16 +46,41 @@ type TransferFromOpts struct {
 	SendAll         bool
 }
 
+type NativeBalanceOpts struct {
+	Network types.Network
+	Address string
+}
+
 type CallTokenFunctionOpts struct {
 	ContractAddress string
 	FunctionName    string
 	Network         types.Network
 }
 
+type TxnBuildResult struct {
+	Data            string   `json:"data"`
+	From            string   `json:"from"`
+	To              string   `json:"to"`
+	Value           *big.Int `json:"value"`
+	GasRequired     *big.Int `json:"gas_required"`
+	GasLimit        uint64   `json:"gas_limit"`
+	GasPrice        *big.Int `json:"gas_price"`
+	PrivateKey      string   `json:"private_key"`
+	IsSufficientGas bool     `json:"is_sufficient_gas"`
+	Network         types.Network
+}
+
 type AbstractClient interface {
-	TransferNative(ctx context.Context, opts NativeTxnOpts) (string, error)
-	TransferToken(ctx context.Context, opts TransferTokenOpts) (string, error)
-	ApproveToken(ctx context.Context, opts ApproveTokenOpts) (string, error)
-	TransferFrom(ctx context.Context, opts TransferFromOpts) (string, error)
+	BuildTransferNativeTxn(ctx context.Context, opts NativeTxnOpts) (*TxnBuildResult, error)
+	BuildTransferTokenTxn(ctx context.Context, opts TransferTokenOpts) (*TxnBuildResult, error)
+	BuildApproveTokenTxn(ctx context.Context, opts ApproveTokenOpts) (*TxnBuildResult, error)
+	BuildTransferFromTxn(ctx context.Context, opts TransferFromOpts) (*TxnBuildResult, error)
+	GetNativeBalance(ctx context.Context, opts NativeBalanceOpts) (*big.Int, error)
 	CallTokenFunction(ctx context.Context, opts CallTokenFunctionOpts, args ...interface{}) (string, error)
+	BroadcastTxn(ctx context.Context, txn *TxnBuildResult) (string, error)
+}
+
+type AbstractTokenFunction interface {
+	GasEstimate() (*big.Int, error)
+	Send() (string, error)
 }

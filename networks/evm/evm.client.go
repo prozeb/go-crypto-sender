@@ -1,4 +1,4 @@
-package networks
+package evm
 
 import (
 	"bytes"
@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"crypto/ecdsa"
+
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
@@ -15,7 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/prozeb/go-crypto-sender/liberrors"
-	localTypes "github.com/prozeb/go-crypto-sender/types"
+	"github.com/prozeb/go-crypto-sender/networks"
 	"github.com/prozeb/go-crypto-sender/utils"
 )
 
@@ -31,6 +33,14 @@ const ERC20ABI = `
 	{"constant":false,"inputs":[{"name":"from","type":"address"},{"name":"to","type":"address"},{"name":"value","type":"uint256"}],"name":"transferFrom","outputs":[{"name":"","type":"bool"}],"type":"function"}
 ]
 `
+
+type Wallet struct {
+	PrivateKeyRaw string
+	Address       string
+	PrivateKey    *ecdsa.PrivateKey
+	Nonce         uint64
+	Balance       *big.Int
+}
 
 type EVMTxnMakerClient struct {
 	Rpc string
@@ -49,109 +59,94 @@ func NewEVMTxnMakerClient(rpc string) (*EVMTxnMakerClient, error) {
 	return client, nil
 }
 
-func (c *EVMTxnMakerClient) TransferNative(ctx context.Context, opts NativeTxnOpts) (string, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return "", err
-	}
+func (c *EVMTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts networks.NativeTxnOpts) (*networks.TxnBuildResult, error) {
 
 	wallet, err := c.getWallet(ctx, opts.PrivateKey)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	fmt.Println("sasasas", wallet.Balance)
 	to := common.HexToAddress(opts.To)
-
 	// ---------------- DYNAMIC GAS ESTIMATION ----------------
-
 	// Estimate gas dynamically (usually ~21000 for simple transfers)
-	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), to, "", nil)
+	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, common.HexToAddress(wallet.Address), to, "", big.NewInt(1e18))
 	if err != nil {
 		fmt.Println("error:getgas", err)
-		return "", err
+		return nil, err
 	}
 	// --- Check if user can afford gas ---
 	if wallet.Balance.Cmp(totalGas) < 0 {
 		fmt.Println("error:balance", err)
-		return "", liberrors.ErrInsufficientBalance
+		return nil, liberrors.ErrInsufficientBalance
 	}
 	var value *big.Int
 	if opts.SendAll {
 		value = new(big.Int).Sub(wallet.Balance, totalGas)
 		if value.Sign() <= 0 {
-			return "", liberrors.ErrInsufficientBalance
+			return nil, liberrors.ErrInsufficientBalance
 		}
 	} else {
 		formattedAmount, err := utils.AmountToChainUnit(fmt.Sprintf("%.0f", opts.Value), "18")
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		totalCost := new(big.Int).Add(formattedAmount, totalGas)
 		if wallet.Balance.Cmp(totalCost) < 0 {
-			return "", liberrors.ErrInsufficientBalance
+			return nil, liberrors.ErrInsufficientBalance
 		}
 		value = formattedAmount
 	}
 
-	tx := types.NewTransaction(wallet.Nonce, to, value, gasLimit, gasPrice, nil)
+	totalAmountToBeSpent := new(big.Int).Add(value, totalGas)
+	txnBuildResult := &networks.TxnBuildResult{
+		From:        wallet.Address,
+		To:          opts.To,
+		Value:       value,
+		GasRequired: totalGas,
+		GasPrice:    gasPrice,
+		Network:     opts.Network,
 
-	chainID, err := client.NetworkID(ctx)
-	if err != nil {
-		fmt.Println("error:networkid", err)
-		return "", err
+		GasLimit:        gasLimit,
+		IsSufficientGas: wallet.Balance.Cmp(totalAmountToBeSpent) >= 0,
+		PrivateKey:      opts.PrivateKey,
 	}
+	return txnBuildResult, nil
 
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), wallet.PrivateKey)
-	if err != nil {
-		fmt.Println("error:signtx", err)
-		return "", liberrors.ErrFailedToSignTx
-	}
-
-	err = client.SendTransaction(ctx, signedTx)
-	if err != nil {
-		fmt.Println("error:senttx", err)
-		return "", liberrors.ErrFailedToSendTx
-	}
-
-	return signedTx.Hash().Hex(), nil
+	// tx := types.NewTransaction(wallet.Nonce, to, value, gasLimit, gasPrice, nil)
+	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 }
 
-func (c *EVMTxnMakerClient) TransferToken(ctx context.Context, opts TransferTokenOpts) (string, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return "", err
-	}
+func (c *EVMTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts networks.TransferTokenOpts) (*networks.TxnBuildResult, error) {
 
 	wallet, err := c.getWallet(ctx, opts.PrivateKey)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	fromAddr := crypto.PubkeyToAddress(wallet.PrivateKey.PublicKey)
-	tokenBalance, err := c.CallTokenFunction(ctx, CallTokenFunctionOpts{
+	tokenBalance, err := c.CallTokenFunction(ctx, networks.CallTokenFunctionOpts{
 		ContractAddress: opts.ContractAddress,
 		FunctionName:    "balanceOf",
 		Network:         opts.Network,
 	}, fromAddr)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	amount := new(big.Int)
 
 	if opts.SendAll {
 		if tokenBalance == "0" {
-			return "", liberrors.ErrInsufficientBalance
+			return nil, liberrors.ErrInsufficientBalance
 		}
 		amount.SetString(tokenBalance, 10)
 	} else {
 		formattedAmount, err := utils.AmountToChainUnit(opts.Amount, strconv.Itoa(opts.Decimals))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		tokenBalanceInWei := new(big.Int)
 		tokenBalanceInWei.SetString(tokenBalance, 10)
 		if tokenBalanceInWei.Cmp(formattedAmount) < 0 {
-			return "", liberrors.ErrInsufficientBalance
+			return nil, liberrors.ErrInsufficientBalance
 		}
 		amount.SetString(formattedAmount.String(), 10)
 	}
@@ -161,50 +156,41 @@ func (c *EVMTxnMakerClient) TransferToken(ctx context.Context, opts TransferToke
 	data, err := erc20ABI.Pack("transfer", to, amount)
 	if err != nil {
 		fmt.Println("error:pack", err)
-		return "", liberrors.ErrAbiError
+		return nil, liberrors.ErrAbiError
 	}
 
 	contract := common.HexToAddress(opts.ContractAddress)
 
-	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, fromAddr, contract, string(data), nil)
+	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, fromAddr, contract, string(data), nil)
 	if err != nil {
 		fmt.Println("error:getgas", err)
-		return "", err
-	}
-	if wallet.Balance.Cmp(totalGas) < 0 {
-		fmt.Println("error:balance", err)
-		return "", liberrors.ErrInsufficientBalance
-	}
-	tx := types.NewTransaction(wallet.Nonce, contract, big.NewInt(0), uint64(gasLimit), gasPrice, data)
-
-	chainID, err := client.NetworkID(context.Background())
-	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), wallet.PrivateKey)
-	if err != nil {
-		return "", err
-	}
+	txnBuildResult := &networks.TxnBuildResult{
+		Data:        string(data),
+		From:        wallet.Address,
+		To:          opts.ContractAddress,
+		Value:       big.NewInt(0),
+		GasRequired: totalGas,
+		Network:     opts.Network,
 
-	err = client.SendTransaction(context.Background(), signedTx)
-	if err != nil {
-		return "", err
+		GasPrice:        gasPrice,
+		GasLimit:        gasLimit,
+		IsSufficientGas: wallet.Balance.Cmp(totalGas) >= 0,
+		PrivateKey:      opts.PrivateKey,
 	}
+	return txnBuildResult, nil
 
-	fmt.Printf("✅ Sent token transfer: %s\n", signedTx.Hash().Hex())
-	return signedTx.Hash().Hex(), nil
+	// tx := types.NewTransaction(wallet.Nonce, contract, big.NewInt(0), uint64(gasLimit), gasPrice, data)
+	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 }
 
-func (c *EVMTxnMakerClient) ApproveToken(ctx context.Context, opts ApproveTokenOpts) (string, error) {
-	client, err := c.getClient()
-	if err != nil {
-		return "", err
-	}
+func (c *EVMTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts networks.ApproveTokenOpts) (*networks.TxnBuildResult, error) {
 
 	wallet, err := c.getWallet(ctx, opts.PrivateKey)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	var amount *big.Int
 	if opts.IsInfinite {
@@ -215,7 +201,7 @@ func (c *EVMTxnMakerClient) ApproveToken(ctx context.Context, opts ApproveTokenO
 	} else {
 		formattedAmount, err := utils.AmountToChainUnit(opts.Allowance, strconv.Itoa(opts.Decimals))
 		if err != nil {
-			return "", fmt.Errorf("failed to convert amount to wei: %w", err)
+			return nil, fmt.Errorf("failed to convert amount to wei: %w", err)
 		}
 
 		amount = formattedAmount
@@ -226,63 +212,53 @@ func (c *EVMTxnMakerClient) ApproveToken(ctx context.Context, opts ApproveTokenO
 	data, err := erc20ABI.Pack("approve", to, amount)
 	if err != nil {
 		fmt.Println("error:pack", err)
-		return "", liberrors.ErrAbiError
+		return nil, liberrors.ErrAbiError
 	}
 
 	contract := common.HexToAddress(opts.ContractAddress)
 
-	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), contract, string(data), nil)
+	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, common.HexToAddress(wallet.Address), contract, string(data), nil)
 	if err != nil {
 		fmt.Println("error:getgas", err)
-		return "", liberrors.ErrGasEstimation
+		return nil, liberrors.ErrGasEstimation
 	}
 
-	if wallet.Balance.Cmp(totalGas) < 0 {
-		fmt.Println("error:balance", err)
-		return "", liberrors.ErrInsufficientBalance
-	}
-	tx := types.NewTransaction(wallet.Nonce, contract, big.NewInt(0), uint64(gasLimit), gasPrice, data)
-	chainID, err := client.NetworkID(ctx)
-	if err != nil {
-		fmt.Println("error:networkid", err)
-		return "", liberrors.ErrFailedToGetNonce
-	}
+	txnBuildResult := &networks.TxnBuildResult{
+		Data:        string(data),
+		From:        wallet.Address,
+		To:          opts.ContractAddress,
+		Value:       big.NewInt(0),
+		GasRequired: totalGas,
+		Network:     opts.Network,
 
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), wallet.PrivateKey)
-	if err != nil {
-		fmt.Println("error:signtx", err)
-		return "", liberrors.ErrFailedToSignTx
+		GasPrice:        gasPrice,
+		GasLimit:        gasLimit,
+		IsSufficientGas: wallet.Balance.Cmp(totalGas) >= 0,
+		PrivateKey:      opts.PrivateKey,
 	}
+	return txnBuildResult, nil
 
-	if err := client.SendTransaction(ctx, signedTx); err != nil {
-		fmt.Println("error:senttx", err)
-		return "", liberrors.ErrFailedToSendTx
-	}
+	// tx := types.NewTransaction(wallet.Nonce, contract, big.NewInt(0), uint64(gasLimit), gasPrice, data)
+	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 
-	fmt.Printf("✅ Approve TX sent: %s\n", signedTx.Hash().Hex())
-	return signedTx.Hash().Hex(), nil
 }
 
-func (c *EVMTxnMakerClient) TransferFrom(ctx context.Context, opts TransferFromOpts) (string, error) {
+func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts networks.TransferFromOpts) (*networks.TxnBuildResult, error) {
 
-	client, err := c.getClient()
-	if err != nil {
-		return "", err
-	}
 	wallet, err := c.getWallet(ctx, opts.PrivateKey)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	// --------------- STEP 1: Check allowance -----------------
 
-	allowanceStr, err := c.CallTokenFunction(ctx, CallTokenFunctionOpts{
+	allowanceStr, err := c.CallTokenFunction(ctx, networks.CallTokenFunctionOpts{
 		ContractAddress: opts.ContractAddress,
 		FunctionName:    "allowance",
 		Network:         opts.Network,
 	}, opts.FromAddress, wallet.Address)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	allowance := new(big.Int)
@@ -290,22 +266,21 @@ func (c *EVMTxnMakerClient) TransferFrom(ctx context.Context, opts TransferFromO
 
 	// --------------- STEP 2: Check balance -----------------
 
-	balanceStr, err := c.CallTokenFunction(ctx, CallTokenFunctionOpts{
+	balanceStr, err := c.CallTokenFunction(ctx, networks.CallTokenFunctionOpts{
 		ContractAddress: opts.ContractAddress,
 		FunctionName:    "balanceOf",
 		Network:         opts.Network,
 	}, opts.FromAddress)
 	if err != nil {
 		fmt.Println("error:balance", err)
-		return "", liberrors.ErrInsufficientBalance
+		return nil, liberrors.ErrInsufficientBalance
 	}
 	tokenBalance := new(big.Int)
 	tokenBalance.SetString(balanceStr, 10)
 
 	// --------------- STEP 3: Determine transfer amount --------
-
+	//todo implement ErrInsufficientTokenBalance
 	transferAmount := new(big.Int)
-
 	if opts.SendAll {
 		if tokenBalance.Cmp(allowance) < 0 {
 			transferAmount.Set(tokenBalance)
@@ -314,78 +289,77 @@ func (c *EVMTxnMakerClient) TransferFrom(ctx context.Context, opts TransferFromO
 		}
 	} else {
 		if opts.Amount == "" {
-			return "", fmt.Errorf("amount is empty")
+			return nil, fmt.Errorf("amount is empty")
 		}
 
 		amount, err := utils.AmountToChainUnit(opts.Amount, strconv.Itoa(opts.Decimals))
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		transferAmount.Set(amount)
 	}
 
 	if allowance.Cmp(transferAmount) < 0 {
 		fmt.Println("error:allowance", err)
-		return "", liberrors.ErrInsufficientAllowance
+		return nil, liberrors.ErrInsufficientAllowance
 	}
 
 	// Validate balance
 	if tokenBalance.Cmp(transferAmount) < 0 {
 		fmt.Println("error:balance", err)
-		return "", liberrors.ErrInsufficientBalance
+		return nil, liberrors.ErrInsufficientBalance
 	}
 
 	// Encode transferFrom call
 	tokenABI, err := abi.JSON(strings.NewReader(ERC20ABI))
 	if err != nil {
 		fmt.Println("error:erc20abi", err)
-		return "", liberrors.ErrAbiError
+		return nil, liberrors.ErrAbiError
 	}
 
 	data, err := tokenABI.Pack("transferFrom", common.HexToAddress(opts.FromAddress), common.HexToAddress(opts.Destination), transferAmount)
 	if err != nil {
 		fmt.Println("error:pack", err)
-		return "", liberrors.ErrAbiError
+		return nil, liberrors.ErrAbiError
 	}
 
 	contractAddress := common.HexToAddress(opts.ContractAddress)
 
-	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), contractAddress, string(data), nil)
+	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, common.HexToAddress(wallet.Address), contractAddress, string(data), nil)
 	if err != nil {
 		fmt.Println("error:gasprice", err)
-		return "", liberrors.ErrGasEstimation
+		return nil, liberrors.ErrGasEstimation
 	}
 
-	if wallet.Balance.Cmp(totalGas) < 0 {
-		fmt.Println("error:balance", err)
-		return "", liberrors.ErrInsufficientBalance
+	txnBuildResult := &networks.TxnBuildResult{
+		Data:    string(data),
+		From:    wallet.Address,
+		To:      opts.ContractAddress,
+		Value:   big.NewInt(0),
+		Network: opts.Network,
+
+		GasRequired:     totalGas,
+		GasPrice:        gasPrice,
+		GasLimit:        gasLimit,
+		IsSufficientGas: wallet.Balance.Cmp(totalGas) >= 0,
+		PrivateKey:      opts.PrivateKey,
 	}
+	return txnBuildResult, nil
 
 	// --------------- STEP 5: Build and send tx ----------------
-	tx := types.NewTransaction(wallet.Nonce, contractAddress, big.NewInt(0), gasLimit, gasPrice, data)
-
-	chainID, err := client.NetworkID(ctx)
-	if err != nil {
-		fmt.Println("error:networkid", err)
-		return "", liberrors.ErrFailedToGetNonce
-	}
-
-	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), wallet.PrivateKey)
-	if err != nil {
-		fmt.Println("error:signtx", err)
-		return "", liberrors.ErrFailedToSignTx
-	}
-
-	err = client.SendTransaction(ctx, signedTx)
-	if err != nil {
-		fmt.Println("error:senttx", err)
-		return "", liberrors.ErrFailedToSendTx
-	}
-
-	return signedTx.Hash().Hex(), nil
+	// tx := types.NewTransaction(wallet.Nonce, contractAddress, big.NewInt(0), gasLimit, gasPrice, data)
+	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 }
 
-func (c *EVMTxnMakerClient) GetGasEstimation(ctx context.Context,
+func (c *EVMTxnMakerClient) GetNativeBalance(ctx context.Context, opts networks.NativeBalanceOpts) (*big.Int, error) {
+	client, err := c.getClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.BalanceAt(ctx, common.HexToAddress(opts.Address), nil)
+}
+
+func (c *EVMTxnMakerClient) getGasEstimation(ctx context.Context,
 	fromAddress common.Address,
 	toAddress common.Address, data string, value *big.Int) (totalGas *big.Int, gasLimit uint64, gasPrice *big.Int, err error) {
 	client, err := c.getClient()
@@ -420,7 +394,7 @@ func (c *EVMTxnMakerClient) GetGasEstimation(ctx context.Context,
 	return totalGas, gasLimit, gasPrice, nil
 }
 
-func (c *EVMTxnMakerClient) CallTokenFunction(ctx context.Context, opts CallTokenFunctionOpts, args ...interface{}) (string, error) {
+func (c *EVMTxnMakerClient) CallTokenFunction(ctx context.Context, opts networks.CallTokenFunctionOpts, args ...interface{}) (string, error) {
 	client, err := c.getClient()
 	if err != nil {
 		return "", err
@@ -481,6 +455,43 @@ func (c *EVMTxnMakerClient) CallTokenFunction(ctx context.Context, opts CallToke
 	}
 }
 
+func (c *EVMTxnMakerClient) BroadcastTxn(ctx context.Context, txn *networks.TxnBuildResult) (string, error) {
+	wallet, err := c.getWallet(ctx, txn.PrivateKey)
+	if err != nil {
+		return "", err
+	}
+
+	totalValue := big.NewInt(0).Add(txn.GasRequired, txn.Value)
+	if wallet.Balance.Cmp(totalValue) < 0 {
+		fmt.Println("error:balance", err)
+		return "", liberrors.ErrInsufficientBalance
+	}
+	tx := types.NewTransaction(wallet.Nonce, common.HexToAddress(txn.To), txn.Value, txn.GasLimit, txn.GasPrice, []byte(txn.Data))
+
+	client, err := c.getClient()
+	if err != nil {
+		return "", err
+	}
+	chainID, err := client.NetworkID(ctx)
+	if err != nil {
+		fmt.Println("error:networkid", err)
+		return "", err
+	}
+	signedTx, err := types.SignTx(tx, types.NewEIP155Signer(chainID), wallet.PrivateKey)
+	if err != nil {
+		fmt.Println("error:signtx", err)
+		return "", liberrors.ErrFailedToSignTx
+	}
+
+	err = client.SendTransaction(ctx, signedTx)
+	if err != nil {
+		fmt.Println("error:senttx", err)
+		return "", liberrors.ErrFailedToSendTx
+	}
+
+	return signedTx.Hash().Hex(), nil
+}
+
 func (c *EVMTxnMakerClient) GetBlock(ctx context.Context) (*types.Block, error) {
 	client, err := c.getClient()
 	if err != nil {
@@ -498,7 +509,7 @@ func (c *EVMTxnMakerClient) getClient() (*ethclient.Client, error) {
 	return client, nil
 }
 
-func (c *EVMTxnMakerClient) getWallet(ctx context.Context, privateKey string) (wallet *localTypes.Wallet, err error) {
+func (c *EVMTxnMakerClient) getWallet(ctx context.Context, privateKey string) (wallet *Wallet, err error) {
 	parsedPrivateKey, err := crypto.HexToECDSA(privateKey)
 	if err != nil {
 		return nil, liberrors.ErrInvalidPrivateKey
@@ -519,7 +530,7 @@ func (c *EVMTxnMakerClient) getWallet(ctx context.Context, privateKey string) (w
 	if err != nil {
 		return nil, liberrors.ErrFailedToGetBalance
 	}
-	return &localTypes.Wallet{
+	return &Wallet{
 		Address:       address.String(),
 		PrivateKeyRaw: privateKey,
 		PrivateKey:    parsedPrivateKey,

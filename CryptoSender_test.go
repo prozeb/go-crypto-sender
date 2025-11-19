@@ -132,7 +132,7 @@ func TestTokenApproveFunctionsTest(t *testing.T) {
 	// fmt.Println("transferFrom hash", transferFrom)
 
 	// =========================== Transfer ===========================
-	transfer, err := client.TransferToken(context.Background(), networks.TransferTokenOpts{
+	transfer, err := client.BuildTransferTokenTxn(context.Background(), networks.TransferTokenOpts{
 		Network:         types.BSC_TESTNET,
 		ContractAddress: tokenAddress,
 		To:              walletAddress2,
@@ -144,4 +144,23 @@ func TestTokenApproveFunctionsTest(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println("transfertxn hash", transfer)
+}
+
+func TestBTCNativeBalanceTest(t *testing.T) {
+	networksAndRPCs := map[types.Network]string{
+		types.BTC_TESTNET: "3e16dce6de0d525f6232b9e7f3c462fdbc4bc3974c9829cb0ac91083000c5af1",
+	}
+	client, err := NewTxnMakerClient(networksAndRPCs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	balance, err := client.GetNativeBalance(context.Background(), networks.NativeBalanceOpts{
+		Address: "tb1q2vqr5c9m400k0c99hd5f85j5x9jrdexuua8udj",
+		Network: types.BTC_TESTNET,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("balance", balance)
 }
