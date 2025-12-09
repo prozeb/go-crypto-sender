@@ -33,26 +33,28 @@ func (b *BTCTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts net
 		return nil, errors.New("multiple private keys are not supported for non-all transfer")
 	}
 
-	formattedAmount := big.NewInt(0)
-	if !opts.SendAll {
-		_formattedAmount, err := utils.AmountToChainUnit(strconv.FormatFloat(opts.Value, 'f', -1, 64), "8")
+	walletAddress, err := btcctxnsender.PrivateKeyToAddress(opts.PrivateKey, b.IsTestnet)
+	if err != nil {
+		return nil, err
+	}
+	walletBalance, err := b.GetNativeBalance(ctx, networks.NativeBalanceOpts{
+		Address: walletAddress,
+	})
+	if err != nil {
+		return nil, err
+	}
+	var formattedAmount *big.Int
+	if opts.SendAll {
+		formattedAmount = walletBalance
+	} else {
+		formattedAmount, err = utils.AmountToChainUnit(strconv.FormatFloat(opts.Value, 'f', -1, 64), "8")
 		if err != nil {
 			return nil, err
 		}
-		walletAddress, err := btcctxnsender.PrivateKeyToAddress(opts.PrivateKey, b.IsTestnet)
-		if err != nil {
-			return nil, err
-		}
-		walletBalance, err := b.GetNativeBalance(ctx, networks.NativeBalanceOpts{
-			Address: walletAddress,
-		})
-		if err != nil {
-			return nil, err
-		}
-		if walletBalance.Cmp(_formattedAmount) < 0 {
+
+		if walletBalance.Cmp(formattedAmount) < 0 {
 			return nil, errors.New("not enough balance")
 		}
-		formattedAmount = _formattedAmount
 	}
 	finalAmount, _ := formattedAmount.Float64()
 

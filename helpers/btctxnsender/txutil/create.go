@@ -14,11 +14,12 @@ import (
 	"github.com/prozeb/go-crypto-sender/helpers/btctxnsender/addressinfo"
 	"github.com/prozeb/go-crypto-sender/helpers/btctxnsender/netchain"
 	"github.com/prozeb/go-crypto-sender/helpers/btctxnsender/wallet"
+	"github.com/prozeb/go-crypto-sender/liberrors"
 )
 
-const DefaultMinerFee = 5000
+const DefaultMinerFee = 20
 
-const maxMinerFee = 50000
+const maxMinerFee = 2500
 
 // https://support.blockchain.com/hc/en-us/articles/210354003-What-is-the-minimum-amount-I-can-send-
 const minSatoshiToSend = 546
@@ -45,7 +46,7 @@ type CreateParams struct {
 	// defaults to addressinfo.FetchFromBlockcypher.
 	Fetch addressinfo.Fetch
 	// defaults to addressinfo.GetSatoshiPerByteFromBlockchain.
-	GetSatoshiPerByte addressinfo.GetSatoshiPerByte
+	// GetSatoshiPerByte addressinfo.GetSatoshiPerByte
 
 	pkInfos   []privateKeyInfo
 	destInfos []destinationInfo
@@ -73,11 +74,9 @@ func (cp CreateParams) fullAmount() int64 {
 
 func Create(params CreateParams) (string, error) {
 	params, err := checkCreateParams(params)
-
 	if err != nil {
 		return "", err
 	}
-
 	addrs, err := getAddressesToWithdrawFrom(params)
 
 	if err != nil {
@@ -93,7 +92,7 @@ func Create(params CreateParams) (string, error) {
 	if params.AutoMinerFee {
 		// calculating miner fee. In case %2==1, added +1
 		bytesNum := (len(txHex) + 1) / 2
-		satoshiPerByte, err := params.GetSatoshiPerByte(params.Net)
+		satoshiPerByte, err := addressinfo.GetSatoshiPerByteAnkr(params.Net, params.ApiKey)
 		if err != nil {
 			return "", fmt.Errorf("couldn't fetch satoshiPerByte: %s", err)
 		}
@@ -136,14 +135,15 @@ func checkCreateParams(p CreateParams) (CreateParams, error) {
 	if p.Fetch == nil {
 		p.Fetch = addressinfo.FetchFromAnkr
 	}
-	if p.GetSatoshiPerByte == nil {
-		p.GetSatoshiPerByte = addressinfo.GetSatoshiPerByteFromBlockchain
-	}
+	// if p.GetSatoshiPerByte == nil {
+	// 	p.GetSatoshiPerByte = addressinfo.GetSatoshiPerByteAnkr
+	// }
 
 	if len(p.Destinations) == 0 {
 		if p.Destination == "" {
 			return CreateParams{}, fmt.Errorf("destination must be specified")
 		}
+
 		if p.Amount < minSatoshiToSend && !p.SendAll {
 			return CreateParams{}, fmt.Errorf("amount of satoshi can't be less than %d", minSatoshiToSend)
 		}
@@ -217,9 +217,17 @@ func getAddressesToWithdrawFrom(params CreateParams) ([]address, error) {
 		}
 	}
 	if params.SendAll {
+		// Validate that balance is sufficient to cover at least the miner fee
+		if satoshiSum <= params.MinerFee {
+			errMsg := fmt.Errorf("insufficient balance for SendAll: balance=%d satoshi, minerFee=%d satoshi (need at least %d satoshi to send)", satoshiSum, params.MinerFee, params.MinerFee+minSatoshiToSend)
+			fmt.Println(errMsg)
+			return nil, liberrors.ErrInsufficientBalance
+		}
 		return addrsToWithdrawFrom, nil
 	} else {
-		return nil, fmt.Errorf("not enough satoshi to send, amount+fee=%d, balance=%d", params.fullCost(), satoshiSum)
+		errMsg := fmt.Errorf("not enough satoshi to send, amount+fee=%d, balance=%d", params.fullCost(), satoshiSum)
+		fmt.Println(errMsg)
+		return nil, liberrors.ErrInsufficientBalance
 	}
 }
 
@@ -258,7 +266,13 @@ func addInputs(tx *wire.MsgTx, utxos []addressinfo.UTXO) error {
 func addTxOutputs(tx *wire.MsgTx, params CreateParams, satoshiRemainder int64, addrs []address) {
 	if params.SendAll {
 		fullBalance := calcBalanceOfAddresses(addrs)
-		tx.AddTxOut(wire.NewTxOut(fullBalance-params.MinerFee, params.destInfos[0].pkScript))
+		outputAmount := fullBalance - params.MinerFee
+		// Defensive check: ensure output amount is positive
+		// This should never happen if validation in getAddressesToWithdrawFrom works correctly
+		if outputAmount <= 0 {
+			panic(fmt.Sprintf("invalid SendAll transaction: output amount would be negative or zero (balance=%d, minerFee=%d)", fullBalance, params.MinerFee))
+		}
+		tx.AddTxOut(wire.NewTxOut(outputAmount, params.destInfos[0].pkScript))
 	} else {
 		for _, info := range params.destInfos {
 			tx.AddTxOut(wire.NewTxOut(info.Amount, info.pkScript))

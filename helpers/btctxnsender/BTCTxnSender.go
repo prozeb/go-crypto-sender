@@ -11,22 +11,26 @@ import (
 )
 
 func SendBTCTxn(privateKey string, toAddress string, amount float64, sendAll bool, isTestnet bool, apiKey string) (string, error) {
-
 	net := netchain.MainNet
 	if isTestnet {
 		net = netchain.Signet
 	}
 	privateKeys := strings.Split(privateKey, ",")
 
-	rawTx, err := txutil.Create(txutil.CreateParams{
-		PrivateKeys: privateKeys,
-		Destination: toAddress,
-		Amount:      int64(amount),
-		Net:         net,
-		SendAll:     sendAll,
-		// MinerFee:    5000,
-		ApiKey: apiKey,
-	})
+	params := txutil.CreateParams{
+		PrivateKeys:  privateKeys,
+		Destination:  toAddress,
+		Net:          net,
+		ApiKey:       apiKey,
+		AutoMinerFee: true,
+	}
+
+	if sendAll {
+		params.SendAll = true
+	} else {
+		params.Amount = int64(amount)
+	}
+	rawTx, err := txutil.Create(params)
 
 	if err != nil {
 		return "", err
@@ -38,6 +42,8 @@ func SendBTCTxn(privateKey string, toAddress string, amount float64, sendAll boo
 		return "", err
 	}
 	return txID, nil
+
+	// return "", nil
 }
 
 func PrivateKeyToAddress(privateKey string, isTestnet bool) (string, error) {

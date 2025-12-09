@@ -148,7 +148,7 @@ func TestTokenApproveFunctionsTest(t *testing.T) {
 
 func TestBTCNativeBalanceTest(t *testing.T) {
 	networksAndRPCs := map[types.Network]string{
-		types.BTC_TESTNET: "3e16dce6de0d525f6232b9e7f3c462fdbc4bc3974c9829cb0ac91083000c5af1",
+		types.BTC_TESTNET: "",
 	}
 	client, err := NewTxnMakerClient(networksAndRPCs)
 	if err != nil {
@@ -163,4 +163,29 @@ func TestBTCNativeBalanceTest(t *testing.T) {
 		t.Fatal(err)
 	}
 	fmt.Println("balance", balance)
+}
+
+func TestBTCNativeTransferTest(t *testing.T) {
+	networksAndRPCs := map[types.Network]string{
+		types.BTC_TESTNET: "",
+	}
+	client, err := NewTxnMakerClient(networksAndRPCs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	buildTxn, err := client.BuildTransferNativeTxn(context.Background(), networks.NativeTxnOpts{
+		PrivateKey: "",
+		To:         "",
+		Network:    types.BTC_TESTNET,
+		SendAll:    true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	txn, err := client.BroadcastTxn(context.Background(), buildTxn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("txn", txn)
 }

@@ -57,9 +57,9 @@ func TestCreate_AutoMinerFee(t *testing.T) {
 		Destination: destination2,
 		Amount:      amount,
 		Fetch:       addressinfo.FetchMock,
-		GetSatoshiPerByte: func(net netchain.Net) (int, error) {
-			return 10, nil
-		},
+		// GetSatoshiPerByte: func(net netchain.Net) (int, error) {
+		// 	return 10, nil
+		// },
 		Net:          netchain.TestNet,
 		AutoMinerFee: true,
 	})

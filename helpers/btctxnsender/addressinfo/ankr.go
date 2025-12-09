@@ -1,11 +1,13 @@
 package addressinfo
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/chaincfg"
@@ -134,8 +136,18 @@ func getAnkrNetworkKey(net netchain.Net) string {
 	return networkKey
 }
 
+func getAnkrNetworkKeyForRPC(net netchain.Net) string {
+	networkKey := "btc"
+
+	if net == netchain.Signet {
+		networkKey = "btc_signet"
+	}
+	return networkKey
+}
+
 func BroadcastTxn(rawTx string, net netchain.Net, ankrApiKey string) (string, error) {
 	url := fmt.Sprintf("https://rpc.ankr.com/premium-http/%s/%s/api/v2/sendtx/%s", getAnkrNetworkKey(net), ankrApiKey, rawTx)
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return "", err
@@ -156,6 +168,47 @@ func BroadcastTxn(rawTx string, net netchain.Net, ankrApiKey string) (string, er
 	if err != nil {
 		return "", err
 	}
-
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("error message: %s", string(body))
+	}
 	return broadcastResp.Result, nil
+}
+
+func GetSatoshiPerByteAnkr(net netchain.Net, ankrApiKey string) (int, error) {
+
+	url := fmt.Sprintf("https://rpc.ankr.com/%s/%s", getAnkrNetworkKeyForRPC(net), ankrApiKey)
+	id := strconv.FormatInt(time.Now().Unix(), 10)
+	payload := map[string]interface{}{
+		"id":     id,
+		"method": "getmempoolinfo",
+		"params": []interface{}{},
+	}
+
+	// Convert to JSON
+	body, _ := json.Marshal(payload)
+	resp, err := http.Post(url, "application/json", bytes.NewBuffer(body))
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, err
+	}
+
+	var respData map[string]interface{}
+	if err := json.Unmarshal(respBody, &respData); err != nil {
+		return 0, err
+	}
+
+	result := respData["result"].(map[string]interface{})
+	totalFee := result["total_fee"].(float64)
+	totalBytes := result["bytes"].(float64)
+
+	totalFeeInSats := int(totalFee * 100_000_000)
+
+	satPerByte := totalFeeInSats / int(totalBytes)
+
+	return satPerByte, nil
 }
