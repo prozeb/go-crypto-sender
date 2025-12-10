@@ -19,12 +19,13 @@ import (
 
 const DefaultMinerFee = 20
 
-const maxMinerFee = 2500
+const maxMinerFee = 6000
 
 // https://support.blockchain.com/hc/en-us/articles/210354003-What-is-the-minimum-amount-I-can-send-
 const minSatoshiToSend = 546
 
 type CreateParams struct {
+	MaxMinerFee int64
 	// WIF-format. Will be omitted if PrivateKeys are specified.
 	PrivateKey string
 	// Iteratively includes each key in transaction until the full amount can be transferred.
@@ -128,6 +129,9 @@ func buildTx(params CreateParams, addrs []address) (string, error) {
 func checkCreateParams(p CreateParams) (CreateParams, error) {
 	if p.MinerFee == 0 {
 		p.MinerFee = DefaultMinerFee
+	}
+	if p.MaxMinerFee == 0 {
+		p.MaxMinerFee = maxMinerFee
 	}
 	if p.Net == "" {
 		p.Net = netchain.MainNet
