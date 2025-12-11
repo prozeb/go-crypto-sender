@@ -303,12 +303,14 @@ func (c *TronTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts net
 		return nil, err
 	}
 
+	totalGasInDecimals, _ := utils.ChainUnitToAmount(feeInTrx.String(), "8")
+	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	result := &networks.TxnBuildResult{
 		Data:            string(inputInStr),
 		From:            wallet.address,
 		To:              opts.ContractAddress,
 		Value:           big.NewInt(0),
-		GasRequired:     feeInTrx,
+		GasRequired:     totalGasInBigInt,
 		IsSufficientGas: wallet.balance.Cmp(feeInTrx) >= 0,
 		Network:         opts.Network,
 
@@ -379,12 +381,15 @@ func (c *TronTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts netw
 	if err != nil {
 		return nil, err
 	}
+
+	totalGasInDecimals, _ := utils.ChainUnitToAmount(feeInTrx.String(), "8")
+	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	result := &networks.TxnBuildResult{
 		Data:            string(inputInStr),
 		From:            wallet.address,
 		To:              opts.ContractAddress,
 		Value:           big.NewInt(0),
-		GasRequired:     feeInTrx,
+		GasRequired:     totalGasInBigInt,
 		IsSufficientGas: wallet.balance.Cmp(feeInTrx) >= 0,
 		Network:         opts.Network,
 
@@ -488,13 +493,14 @@ func (c *TronTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netw
 	if err != nil {
 		return nil, err
 	}
-
+	totalGasInDecimals, _ := utils.ChainUnitToAmount(feeInTrx.String(), "8")
+	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	result := &networks.TxnBuildResult{
 		Data:            string(inputInStr),
 		From:            wallet.address,
 		To:              opts.ContractAddress,
 		Value:           big.NewInt(0),
-		GasRequired:     feeInTrx,
+		GasRequired:     totalGasInBigInt,
 		IsSufficientGas: wallet.balance.Cmp(feeInTrx) >= 0,
 		Network:         opts.Network,
 

@@ -189,3 +189,30 @@ func TestBTCNativeTransferTest(t *testing.T) {
 	}
 	fmt.Println("txn", txn)
 }
+
+func TestGasNativeTransferTest(t *testing.T) {
+	// networksAndRPCs := map[types.Network]string{
+	// 	types.SEPOLIA: "https://rpc.ankr.com/eth_sepolia/3e16dce6de0d525f6232b9e7f3c462fdbc4bc3974c9829cb0ac91083000c5af1",
+	// }
+	// client, err := NewTxnMakerClient(networksAndRPCs)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// buildTxn, err := client.BuildTransferNativeTxn(context.Background(), networks.NativeTxnOpts{
+	// 	PrivateKey: "e6c2fca2890cb0873053d584029f23478bbdf616764dbd87349a68cf0efa708c",
+	// 	To:         "0x82f9745d366fedf8b3f2d5bffcdf1e73425dcf58",
+	// 	Network:    types.SEPOLIA,
+	// 	SendAll:    false,
+	// 	Value:      "47623952376",
+	// })
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+
+	// txn, err := client.BroadcastTxn(context.Background(), buildTxn)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// fmt.Println("txn", txn)
+}

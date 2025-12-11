@@ -69,7 +69,7 @@ func (c *EVMTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts net
 	to := common.HexToAddress(opts.To)
 	// ---------------- DYNAMIC GAS ESTIMATION ----------------
 	// Estimate gas dynamically (usually ~21000 for simple transfers)
-	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, common.HexToAddress(wallet.Address), to, "", big.NewInt(1e18))
+	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), to, "", big.NewInt(1e18))
 	if err != nil {
 		fmt.Println("error:getgas", err)
 		return nil, err
@@ -98,11 +98,14 @@ func (c *EVMTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts net
 	}
 
 	totalAmountToBeSpent := new(big.Int).Add(value, totalGas)
+
+	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
+	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	txnBuildResult := &networks.TxnBuildResult{
 		From:        wallet.Address,
 		To:          opts.To,
 		Value:       value,
-		GasRequired: totalGas,
+		GasRequired: totalGasInBigInt,
 		GasPrice:    gasPrice,
 		Network:     opts.Network,
 
@@ -161,18 +164,19 @@ func (c *EVMTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts netw
 
 	contract := common.HexToAddress(opts.ContractAddress)
 
-	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, fromAddr, contract, string(data), nil)
+	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, fromAddr, contract, string(data), nil)
 	if err != nil {
 		fmt.Println("error:getgas", err)
 		return nil, err
 	}
-
+	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
+	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	txnBuildResult := &networks.TxnBuildResult{
 		Data:        string(data),
 		From:        wallet.Address,
 		To:          opts.ContractAddress,
 		Value:       big.NewInt(0),
-		GasRequired: totalGas,
+		GasRequired: totalGasInBigInt,
 		Network:     opts.Network,
 
 		GasPrice:        gasPrice,
@@ -217,18 +221,20 @@ func (c *EVMTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts netwo
 
 	contract := common.HexToAddress(opts.ContractAddress)
 
-	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, common.HexToAddress(wallet.Address), contract, string(data), nil)
+	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), contract, string(data), nil)
 	if err != nil {
 		fmt.Println("error:getgas", err)
 		return nil, liberrors.ErrGasEstimation
 	}
 
+	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
+	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	txnBuildResult := &networks.TxnBuildResult{
 		Data:        string(data),
 		From:        wallet.Address,
 		To:          opts.ContractAddress,
 		Value:       big.NewInt(0),
-		GasRequired: totalGas,
+		GasRequired: totalGasInBigInt,
 		Network:     opts.Network,
 
 		GasPrice:        gasPrice,
@@ -325,12 +331,13 @@ func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netwo
 
 	contractAddress := common.HexToAddress(opts.ContractAddress)
 
-	totalGas, gasLimit, gasPrice, err := c.getGasEstimation(ctx, common.HexToAddress(wallet.Address), contractAddress, string(data), nil)
+	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), contractAddress, string(data), nil)
 	if err != nil {
 		fmt.Println("error:gasprice", err)
 		return nil, liberrors.ErrGasEstimation
 	}
-
+	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
+	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	txnBuildResult := &networks.TxnBuildResult{
 		Data:    string(data),
 		From:    wallet.Address,
@@ -338,7 +345,7 @@ func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netwo
 		Value:   big.NewInt(0),
 		Network: opts.Network,
 
-		GasRequired:     totalGas,
+		GasRequired:     totalGasInBigInt,
 		GasPrice:        gasPrice,
 		GasLimit:        gasLimit,
 		IsSufficientGas: wallet.Balance.Cmp(totalGas) >= 0,
@@ -359,7 +366,7 @@ func (c *EVMTxnMakerClient) GetNativeBalance(ctx context.Context, opts networks.
 	return client.BalanceAt(ctx, common.HexToAddress(opts.Address), nil)
 }
 
-func (c *EVMTxnMakerClient) getGasEstimation(ctx context.Context,
+func (c *EVMTxnMakerClient) GetGasEstimation(ctx context.Context,
 	fromAddress common.Address,
 	toAddress common.Address, data string, value *big.Int) (totalGas *big.Int, gasLimit uint64, gasPrice *big.Int, err error) {
 	client, err := c.getClient()
