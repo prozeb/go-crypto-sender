@@ -47,9 +47,13 @@ func (b *BTCTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts net
 	if opts.SendAll {
 		formattedAmount = walletBalance
 	} else {
-		formattedAmount, err = utils.AmountToChainUnit(strconv.FormatFloat(opts.Value, 'f', -1, 64), "8")
-		if err != nil {
-			return nil, err
+		if opts.IsAmountInChainUnit {
+			formattedAmount = big.NewInt(int64(opts.Value))
+		} else {
+			formattedAmount, err = utils.AmountToChainUnit(strconv.FormatFloat(opts.Value, 'f', -1, 64), "8")
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if walletBalance.Cmp(formattedAmount) < 0 {

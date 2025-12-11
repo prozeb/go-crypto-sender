@@ -86,26 +86,28 @@ func (c *EVMTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts net
 			return nil, liberrors.ErrInsufficientBalance
 		}
 	} else {
-		formattedAmount, err := utils.AmountToChainUnit(fmt.Sprintf("%.0f", opts.Value), "18")
-		if err != nil {
-			return nil, err
+		if opts.IsAmountInChainUnit {
+			value = big.NewInt(int64(opts.Value))
+		} else {
+			formattedAmount, err := utils.AmountToChainUnit(fmt.Sprintf("%.0f", opts.Value), "18")
+			if err != nil {
+				return nil, err
+			}
+			value = formattedAmount
 		}
-		totalCost := new(big.Int).Add(formattedAmount, totalGas)
+		totalCost := new(big.Int).Add(value, totalGas)
 		if wallet.Balance.Cmp(totalCost) < 0 {
 			return nil, liberrors.ErrInsufficientBalance
 		}
-		value = formattedAmount
 	}
 
 	totalAmountToBeSpent := new(big.Int).Add(value, totalGas)
 
-	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
-	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	txnBuildResult := &networks.TxnBuildResult{
 		From:        wallet.Address,
 		To:          opts.To,
 		Value:       value,
-		GasRequired: totalGasInBigInt,
+		GasRequired: totalGas,
 		GasPrice:    gasPrice,
 		Network:     opts.Network,
 
@@ -142,16 +144,20 @@ func (c *EVMTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts netw
 		}
 		amount.SetString(tokenBalance, 10)
 	} else {
-		formattedAmount, err := utils.AmountToChainUnit(opts.Amount, strconv.Itoa(opts.Decimals))
-		if err != nil {
-			return nil, err
+		if opts.IsAmountInChainUnit {
+			amount.SetString(opts.Amount, 10)
+		} else {
+			formattedAmount, err := utils.AmountToChainUnit(opts.Amount, strconv.Itoa(opts.Decimals))
+			if err != nil {
+				return nil, err
+			}
+			amount = formattedAmount
 		}
 		tokenBalanceInWei := new(big.Int)
 		tokenBalanceInWei.SetString(tokenBalance, 10)
-		if tokenBalanceInWei.Cmp(formattedAmount) < 0 {
+		if tokenBalanceInWei.Cmp(amount) < 0 {
 			return nil, liberrors.ErrInsufficientBalance
 		}
-		amount.SetString(formattedAmount.String(), 10)
 	}
 
 	erc20ABI, _ := abi.JSON(bytes.NewReader([]byte(ERC20ABI)))
@@ -169,14 +175,13 @@ func (c *EVMTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts netw
 		fmt.Println("error:getgas", err)
 		return nil, err
 	}
-	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
-	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
+
 	txnBuildResult := &networks.TxnBuildResult{
 		Data:        string(data),
 		From:        wallet.Address,
 		To:          opts.ContractAddress,
 		Value:       big.NewInt(0),
-		GasRequired: totalGasInBigInt,
+		GasRequired: totalGas,
 		Network:     opts.Network,
 
 		GasPrice:        gasPrice,
@@ -196,19 +201,22 @@ func (c *EVMTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts netwo
 	if err != nil {
 		return nil, err
 	}
-	var amount *big.Int
+	amount := big.NewInt(0)
 	if opts.IsInfinite {
 		amount = new(big.Int).Sub(
 			new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil),
 			big.NewInt(1),
 		)
 	} else {
-		formattedAmount, err := utils.AmountToChainUnit(opts.Allowance, strconv.Itoa(opts.Decimals))
-		if err != nil {
-			return nil, fmt.Errorf("failed to convert amount to wei: %w", err)
+		if opts.IsAmountInChainUnit {
+			amount.SetString(opts.Allowance, 10)
+		} else {
+			formattedAmount, err := utils.AmountToChainUnit(opts.Allowance, strconv.Itoa(opts.Decimals))
+			if err != nil {
+				return nil, fmt.Errorf("failed to convert amount to wei: %w", err)
+			}
+			amount = formattedAmount
 		}
-
-		amount = formattedAmount
 	}
 
 	erc20ABI, _ := abi.JSON(bytes.NewReader([]byte(ERC20ABI)))
@@ -227,14 +235,12 @@ func (c *EVMTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts netwo
 		return nil, liberrors.ErrGasEstimation
 	}
 
-	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
-	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	txnBuildResult := &networks.TxnBuildResult{
 		Data:        string(data),
 		From:        wallet.Address,
 		To:          opts.ContractAddress,
 		Value:       big.NewInt(0),
-		GasRequired: totalGasInBigInt,
+		GasRequired: totalGas,
 		Network:     opts.Network,
 
 		GasPrice:        gasPrice,
@@ -297,12 +303,15 @@ func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netwo
 		if opts.Amount == "" {
 			return nil, fmt.Errorf("amount is empty")
 		}
-
-		amount, err := utils.AmountToChainUnit(opts.Amount, strconv.Itoa(opts.Decimals))
-		if err != nil {
-			return nil, err
+		if opts.IsAmountInChainUnit {
+			transferAmount.SetString(opts.Amount, 10)
+		} else {
+			amount, err := utils.AmountToChainUnit(opts.Amount, strconv.Itoa(opts.Decimals))
+			if err != nil {
+				return nil, err
+			}
+			transferAmount.Set(amount)
 		}
-		transferAmount.Set(amount)
 	}
 
 	if allowance.Cmp(transferAmount) < 0 {
@@ -336,8 +345,7 @@ func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netwo
 		fmt.Println("error:gasprice", err)
 		return nil, liberrors.ErrGasEstimation
 	}
-	totalGasInDecimals, _ := utils.ChainUnitToAmount(totalGas.String(), "18")
-	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
+
 	txnBuildResult := &networks.TxnBuildResult{
 		Data:    string(data),
 		From:    wallet.Address,
@@ -345,7 +353,7 @@ func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netwo
 		Value:   big.NewInt(0),
 		Network: opts.Network,
 
-		GasRequired:     totalGasInBigInt,
+		GasRequired:     totalGas,
 		GasPrice:        gasPrice,
 		GasLimit:        gasLimit,
 		IsSufficientGas: wallet.Balance.Cmp(totalGas) >= 0,

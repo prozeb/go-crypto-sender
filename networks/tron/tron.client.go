@@ -193,9 +193,15 @@ func (c *TronTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts ne
 		return nil, err
 	}
 
-	finalAmount, err := utils.AmountToChainUnit(fmt.Sprintf("%f", opts.Value), "8")
-	if err != nil {
-		return nil, err
+	finalAmount := big.NewInt(0)
+	if opts.IsAmountInChainUnit {
+		amountInStr := fmt.Sprintf("%f", opts.Value)
+		finalAmount.SetString(amountInStr, 10)
+	} else {
+		finalAmount, err = utils.AmountToChainUnit(fmt.Sprintf("%f", opts.Value), "8")
+		if err != nil {
+			return nil, err
+		}
 	}
 	gasAmount, err := utils.AmountToChainUnit(fmt.Sprintf("%f", 1.1*1e8), "8")
 	if err != nil {
@@ -248,11 +254,15 @@ func (c *TronTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts net
 	if opts.SendAll {
 		finalAmount = tokenBalanceInBigInt
 	} else {
-		amount, err := utils.AmountToChainUnit(opts.Amount, fmt.Sprintf("%d", opts.Decimals))
-		if err != nil {
-			return nil, err
+		if opts.IsAmountInChainUnit {
+			finalAmount.SetString(opts.Amount, 10)
+		} else {
+			amount, err := utils.AmountToChainUnit(opts.Amount, fmt.Sprintf("%d", opts.Decimals))
+			if err != nil {
+				return nil, err
+			}
+			finalAmount = amount
 		}
-		finalAmount = amount
 	}
 
 	if tokenBalanceInBigInt.Cmp(finalAmount) < 0 {
@@ -303,14 +313,12 @@ func (c *TronTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts net
 		return nil, err
 	}
 
-	totalGasInDecimals, _ := utils.ChainUnitToAmount(feeInTrx.String(), "8")
-	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	result := &networks.TxnBuildResult{
 		Data:            string(inputInStr),
 		From:            wallet.address,
 		To:              opts.ContractAddress,
 		Value:           big.NewInt(0),
-		GasRequired:     totalGasInBigInt,
+		GasRequired:     feeInTrx,
 		IsSufficientGas: wallet.balance.Cmp(feeInTrx) >= 0,
 		Network:         opts.Network,
 
@@ -332,11 +340,15 @@ func (c *TronTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts netw
 	if opts.IsInfinite {
 		amount.Sub(new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), big.NewInt(1))
 	} else {
-		finalAmount, err := utils.AmountToChainUnit(opts.Allowance, fmt.Sprintf("%d", opts.Decimals))
-		if err != nil {
-			return nil, err
+		if opts.IsAmountInChainUnit {
+			amount.SetString(opts.Allowance, 10)
+		} else {
+			_amount, err := utils.AmountToChainUnit(opts.Allowance, fmt.Sprintf("%d", opts.Decimals))
+			if err != nil {
+				return nil, err
+			}
+			amount = _amount
 		}
-		amount = finalAmount
 	}
 	selector := "approve(address,uint256)"
 
@@ -382,14 +394,12 @@ func (c *TronTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts netw
 		return nil, err
 	}
 
-	totalGasInDecimals, _ := utils.ChainUnitToAmount(feeInTrx.String(), "8")
-	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	result := &networks.TxnBuildResult{
 		Data:            string(inputInStr),
 		From:            wallet.address,
 		To:              opts.ContractAddress,
 		Value:           big.NewInt(0),
-		GasRequired:     totalGasInBigInt,
+		GasRequired:     feeInTrx,
 		IsSufficientGas: wallet.balance.Cmp(feeInTrx) >= 0,
 		Network:         opts.Network,
 
@@ -430,11 +440,15 @@ func (c *TronTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netw
 	if opts.SendAll {
 		finalAmount = tokenBalanceInBigInt
 	} else {
-		amount, err := utils.AmountToChainUnit(opts.Amount, fmt.Sprintf("%d", opts.Decimals))
-		if err != nil {
-			return nil, err
+		if opts.IsAmountInChainUnit {
+			finalAmount.SetString(opts.Amount, 10)
+		} else {
+			amount, err := utils.AmountToChainUnit(opts.Amount, fmt.Sprintf("%d", opts.Decimals))
+			if err != nil {
+				return nil, err
+			}
+			finalAmount = amount
 		}
-		finalAmount = amount
 	}
 
 	if tokenBalanceInBigInt.Cmp(finalAmount) < 0 {
@@ -493,14 +507,12 @@ func (c *TronTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netw
 	if err != nil {
 		return nil, err
 	}
-	totalGasInDecimals, _ := utils.ChainUnitToAmount(feeInTrx.String(), "8")
-	totalGasInBigInt, _ := big.NewFloat(totalGasInDecimals).Int(nil)
 	result := &networks.TxnBuildResult{
 		Data:            string(inputInStr),
 		From:            wallet.address,
 		To:              opts.ContractAddress,
 		Value:           big.NewInt(0),
-		GasRequired:     totalGasInBigInt,
+		GasRequired:     feeInTrx,
 		IsSufficientGas: wallet.balance.Cmp(feeInTrx) >= 0,
 		Network:         opts.Network,
 

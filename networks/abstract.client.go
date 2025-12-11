@@ -8,42 +8,46 @@ import (
 )
 
 type NativeTxnOpts struct {
-	PrivateKey string
-	To         string
-	Value      float64
-	Network    types.Network
-	SendAll    bool
+	PrivateKey          string
+	To                  string
+	Value               float64
+	Network             types.Network
+	SendAll             bool
+	IsAmountInChainUnit bool
 }
 
 type TransferTokenOpts struct {
-	PrivateKey      string
-	ContractAddress string
-	Amount          string
-	Decimals        int
-	To              string
-	Network         types.Network
-	SendAll         bool
+	PrivateKey          string
+	ContractAddress     string
+	Amount              string
+	Decimals            int
+	To                  string
+	Network             types.Network
+	SendAll             bool
+	IsAmountInChainUnit bool
 }
 
 type ApproveTokenOpts struct {
-	PrivateKey      string
-	ContractAddress string
-	Spender         string
-	Allowance       string
-	Decimals        int
-	IsInfinite      bool
-	Network         types.Network
+	PrivateKey          string
+	ContractAddress     string
+	Spender             string
+	Allowance           string
+	Decimals            int
+	IsInfinite          bool
+	Network             types.Network
+	IsAmountInChainUnit bool
 }
 
 type TransferFromOpts struct {
-	PrivateKey      string
-	ContractAddress string
-	Amount          string
-	Decimals        int
-	Destination     string
-	FromAddress     string
-	Network         types.Network
-	SendAll         bool
+	PrivateKey          string
+	ContractAddress     string
+	Amount              string
+	Decimals            int
+	Destination         string
+	FromAddress         string
+	Network             types.Network
+	SendAll             bool
+	IsAmountInChainUnit bool
 }
 
 type NativeBalanceOpts struct {
