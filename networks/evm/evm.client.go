@@ -67,12 +67,10 @@ func (c *EVMTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts net
 	}
 
 	to := common.HexToAddress(opts.To)
-	// ---------------- DYNAMIC GAS ESTIMATION ----------------
-	// Estimate gas dynamically (usually ~21000 for simple transfers)
-	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), to, "", big.NewInt(1e18))
+	totalGas, gasLimit, gasPrice, err := c.GetGasEstimation(ctx, common.HexToAddress(wallet.Address), to, "", big.NewInt(.000000001*1e18))
 	if err != nil {
 		fmt.Println("error:getgas", err)
-		return nil, err
+		return nil, liberrors.ErrGasEstimation
 	}
 	// --- Check if user can afford gas ---
 	if wallet.Balance.Cmp(totalGas) < 0 {
