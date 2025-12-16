@@ -191,5 +191,46 @@ func TestBTCNativeTransferTest(t *testing.T) {
 }
 
 func TestGasNativeTransferTest(t *testing.T) {
+	txnOpts := networks.ApproveTokenOpts{
+		PrivateKey:      "",
+		ContractAddress: "TPZiV1hj4Mqwnwphksie6WmbxvBc3sQPvV",
+		Spender:         "TShozjYZUEWVnADXEGjA9zHzHf6dL3DhFw",
+		Allowance:       "0",
+		Decimals:        6,
+		IsInfinite:      true,
+		Network:         types.SHASTA,
+	}
 
+	networksAndRPCs := map[types.Network]string{
+		types.SHASTA: "https://api.shasta.trongrid.io",
+	}
+	client, err := NewTxnMakerClient(networksAndRPCs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txnBuild, err := client.BuildApproveTokenTxn(context.Background(), txnOpts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	amountInFloat, _ := txnBuild.GasRequired.Float64()
+
+	txnOpt := networks.NativeTxnOpts{
+		PrivateKey:          "",
+		To:                  "TWaWiCyKbtZR1rCsPmzmjBtjNJGVKgvFjp",
+		Value:               amountInFloat,
+		IsAmountInChainUnit: true,
+		Network:             types.SHASTA,
+		SendAll:             false,
+	}
+
+	txnBuild, err = client.BuildTransferNativeTxn(context.Background(), txnOpt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	txn, err := client.BroadcastTxn(context.Background(), txnBuild)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("txn", txn)
 }

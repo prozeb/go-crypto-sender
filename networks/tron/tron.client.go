@@ -203,7 +203,7 @@ func (c *TronTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts ne
 			return nil, err
 		}
 	}
-	gasAmount, err := utils.AmountToChainUnit(fmt.Sprintf("%f", 1.1*1e8), "8")
+	gasAmount, err := utils.AmountToChainUnit(fmt.Sprintf("%f", 0.1), "8")
 	if err != nil {
 		return nil, err
 	}
@@ -217,11 +217,11 @@ func (c *TronTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts ne
 	totalAmountToBeSpent := new(big.Int).Add(finalAmount, gasAmount)
 
 	result := &networks.TxnBuildResult{
-		From:    wallet.address,
-		To:      opts.To,
-		Value:   finalAmount,
-		Network: opts.Network,
-
+		From:            wallet.address,
+		To:              opts.To,
+		Value:           finalAmount,
+		Network:         opts.Network,
+		GasRequired:     gasAmount,
 		IsSufficientGas: wallet.balance.Cmp(totalAmountToBeSpent) >= 0,
 		PrivateKey:      opts.PrivateKey,
 	}

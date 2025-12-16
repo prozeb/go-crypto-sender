@@ -115,8 +115,6 @@ func (c *EVMTxnMakerClient) BuildTransferNativeTxn(ctx context.Context, opts net
 	}
 	return txnBuildResult, nil
 
-	// tx := types.NewTransaction(wallet.Nonce, to, value, gasLimit, gasPrice, nil)
-	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 }
 
 func (c *EVMTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts networks.TransferTokenOpts) (*networks.TxnBuildResult, error) {
@@ -189,8 +187,6 @@ func (c *EVMTxnMakerClient) BuildTransferTokenTxn(ctx context.Context, opts netw
 	}
 	return txnBuildResult, nil
 
-	// tx := types.NewTransaction(wallet.Nonce, contract, big.NewInt(0), uint64(gasLimit), gasPrice, data)
-	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 }
 
 func (c *EVMTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts networks.ApproveTokenOpts) (*networks.TxnBuildResult, error) {
@@ -247,9 +243,6 @@ func (c *EVMTxnMakerClient) BuildApproveTokenTxn(ctx context.Context, opts netwo
 		PrivateKey:      opts.PrivateKey,
 	}
 	return txnBuildResult, nil
-
-	// tx := types.NewTransaction(wallet.Nonce, contract, big.NewInt(0), uint64(gasLimit), gasPrice, data)
-	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 
 }
 
@@ -345,12 +338,11 @@ func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netwo
 	}
 
 	txnBuildResult := &networks.TxnBuildResult{
-		Data:    string(data),
-		From:    wallet.Address,
-		To:      opts.ContractAddress,
-		Value:   big.NewInt(0),
-		Network: opts.Network,
-
+		Data:            string(data),
+		From:            wallet.Address,
+		To:              opts.ContractAddress,
+		Value:           big.NewInt(0),
+		Network:         opts.Network,
 		GasRequired:     totalGas,
 		GasPrice:        gasPrice,
 		GasLimit:        gasLimit,
@@ -359,9 +351,6 @@ func (c *EVMTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netwo
 	}
 	return txnBuildResult, nil
 
-	// --------------- STEP 5: Build and send tx ----------------
-	// tx := types.NewTransaction(wallet.Nonce, contractAddress, big.NewInt(0), gasLimit, gasPrice, data)
-	// return c.broadcastTxn(client, ctx, wallet.PrivateKey, tx)
 }
 
 func (c *EVMTxnMakerClient) GetNativeBalance(ctx context.Context, opts networks.NativeBalanceOpts) (*big.Int, error) {
