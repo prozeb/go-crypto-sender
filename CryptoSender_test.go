@@ -191,15 +191,6 @@ func TestBTCNativeTransferTest(t *testing.T) {
 }
 
 func TestGasNativeTransferTest(t *testing.T) {
-	txnOpts := networks.ApproveTokenOpts{
-		PrivateKey:      "",
-		ContractAddress: "TPZiV1hj4Mqwnwphksie6WmbxvBc3sQPvV",
-		Spender:         "TShozjYZUEWVnADXEGjA9zHzHf6dL3DhFw",
-		Allowance:       "0",
-		Decimals:        6,
-		IsInfinite:      true,
-		Network:         types.SHASTA,
-	}
 
 	networksAndRPCs := map[types.Network]string{
 		types.SHASTA: "https://api.shasta.trongrid.io",
@@ -208,29 +199,21 @@ func TestGasNativeTransferTest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	txnBuild, err := client.BuildApproveTokenTxn(context.Background(), txnOpts)
-	if err != nil {
-		t.Fatal(err)
-	}
 
-	amountInFloat, _ := txnBuild.GasRequired.Float64()
-
-	txnOpt := networks.NativeTxnOpts{
+	opts := networks.TransferFromOpts{
 		PrivateKey:          "",
-		To:                  "TWaWiCyKbtZR1rCsPmzmjBtjNJGVKgvFjp",
-		Value:               amountInFloat,
+		ContractAddress:     "TPZiV1hj4Mqwnwphksie6WmbxvBc3sQPvV",
+		Amount:              "10023000000",
+		FromAddress:         "TUvCLXCCvNhk15Bab8B4uJyedHFAh5APhA",
+		Decimals:            6,
 		IsAmountInChainUnit: true,
+		Destination:         "TZCqjcBRMdC253HmT3kTfBkKzKmEih2soL", // external wallet
 		Network:             types.SHASTA,
-		SendAll:             false,
 	}
 
-	txnBuild, err = client.BuildTransferNativeTxn(context.Background(), txnOpt)
+	transferFrom, err := client.BuildTransferFromTxn(context.Background(), opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	txn, err := client.BroadcastTxn(context.Background(), txnBuild)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Println("txn", txn)
+	fmt.Println("transferFrom", transferFrom.IsSufficientGas, transferFrom.GasRequired)
 }

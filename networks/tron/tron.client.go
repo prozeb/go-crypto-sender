@@ -507,6 +507,7 @@ func (c *TronTxnMakerClient) BuildTransferFromTxn(ctx context.Context, opts netw
 	if err != nil {
 		return nil, err
 	}
+
 	result := &networks.TxnBuildResult{
 		Data:            string(inputInStr),
 		From:            wallet.address,
